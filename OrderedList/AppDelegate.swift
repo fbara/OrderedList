@@ -69,6 +69,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyStoreTrumpMergePolicy
         
+        NotificationCenter.default.addObserver(self, selector: #selector(self.processUpdate), name: .NSPersistentStoreRemoteChange, object: nil)
+        
         return container
     }()
 
@@ -87,6 +89,49 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
         }
     }
+    
+    @objc func processUpdate(notification: NSNotification) {
+        operationQueue.addOperation {
+            //process notification to be executed
+            
+            //get context
+            let context = self.persistentContainer.newBackgroundContext()
+            context.performAndWait {
+                //get list items out of store
+                let items: [ListItem]
+                do {
+                    try items = context.fetch(ListItem.getListItemFetchRequest())
+                } catch {
+                    let nserror = error as NSError
+                    fatalError("Unresolved Error: \(nserror), \(nserror.userInfo)")
+                }
+            
+                //reorder items
+                items.enumerated().forEach { index, item in
+                    if item.order != index {
+                        item.order = index
+                    }
+                }
+            
+                //save if we need to save
+                if context.hasChanges {
+                    do {
+                        try context.save()
+                    } catch {
+                        let nserror = error as NSError
+                        fatalError("Unresolved error \(nserror), \(nserror.userInfo)")
+                    }
+                }
+            }
+        }
+    }
+    
+    lazy var operationQueue: OperationQueue = {
+        var queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        
+        return queue
+    }()
 
 }
 
